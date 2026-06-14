@@ -635,7 +635,7 @@
     <section class="panel" id="detail" aria-live="polite">
       <h2>全景说明</h2>
       <div class="meta">CLICK A NODE</div>
-      <p>图从本地 PDF 的离线/在线架构出发，结合 DeltaFStation 的 <code>AI Agent</code>、<code>ToolRegistry</code>、<code>ToolRunner</code>、<code>MCP</code>、回测与策略运行工具链，落到投研助手的四条执行路径。</p>
+      <p>图从本地 PDF 的离线/在线架构出发，结合补充文档里的 <code>Agent + Skills</code>、<code>RAG</code>、<code>SQL</code>、<code>Function Call</code>、多智能体协同、舆情监控、财报/研报分析和风险复核，落到投研助手的四条执行路径。</p>
       <p>顶部路径按钮会高亮每条链路；点击节点可查看该节点的技术实现方式与业务含义。</p>
     </section>
   </main>
@@ -660,8 +660,8 @@ const zones = [
   { id: "z-offline", x: 40, y: 76, w: 1820, h: 258, title: "1 离线知识库构建", sub: "多模态上传、解析、分块、标签、结构化抽取、向量/SQL/目录入库" },
   { id: "z-route", x: 40, y: 362, w: 1820, h: 220, title: "2 路由前：用户问题进入智能顾问", sub: "自然语言、快捷指令、场景感知、Memory、Query 改写、精准缓存、意图识别" },
   { id: "z-a", x: 40, y: 622, w: 435, h: 530, title: "A 知识查找 · RAG", sub: "三层问答策略 + 进阶 RAG Pipeline" },
-  { id: "z-b", x: 505, y: 622, w: 405, h: 530, title: "B 单一工具调用", sub: "最高频意图：运行策略回测" },
-  { id: "z-c", x: 940, y: 622, w: 420, h: 530, title: "C 多步骤标准化路径 · Workflow", sub: "策略运行/QMT 交易前检查与监控" },
+  { id: "z-b", x: 505, y: 622, w: 405, h: 530, title: "B 单一工具调用", sub: "最高频意图：舆情/消息面分析 Function Call" },
+  { id: "z-c", x: 940, y: 622, w: 420, h: 530, title: "C 多步骤标准化路径 · Workflow", sub: "生成投研报告：新闻、情绪、研报、财报、事实校验" },
   { id: "z-d", x: 1390, y: 622, w: 470, h: 530, title: "D Plan 自主规划", sub: "复杂开放式投研任务拆解、执行、反思" },
   { id: "z-post", x: 40, y: 1190, w: 1820, h: 170, title: "7 生成、后处理、兜底", sub: "答案聚合、引用、风控合规、UI 渲染、追问/转人工/拒答" }
 ];
@@ -690,28 +690,28 @@ const nodes = [
   { id: "a_rerank", lane: "A RAG", kind: "process", x: 265, y: 892, w: 170, h: 70, title: "重排与去重", meta: "Cross-encoder / MMR", tech: "Rerank + diversity + freshness scoring", detail: "按相关性、时效性、权限、来源可信度和多样性重排；去掉重复 chunk，保留页码、段落和表格出处。" },
   { id: "a_pack", lane: "A RAG", kind: "process", x: 70, y: 996, w: 170, h: 70, title: "上下文打包", meta: "证据包 / 引用 / token budget", tech: "Context compression + citation map", detail: "把结构化结果、召回片段、原文引用和风险提示压缩成 prompt 上下文，并限制上下文长度。" },
   { id: "a_eval", lane: "A RAG", kind: "risk", x: 265, y: 996, w: 170, h: 70, title: "证据校验", meta: "答案一致性 / 缺失追问", tech: "Attribution check + confidence scoring", detail: "校验回答是否被证据支持；证据不足时追问、返回可查范围，或降级为操作引导。" },
-  { id: "b_entry", lane: "B 单工具", kind: "input", x: 535, y: 692, w: 170, h: 64, title: "最高频工具意图", meta: "运行策略回测", tech: "Intent=run_backtest_auto", detail: "选择最高频工具意图作为样例：用户希望“帮我回测某标的/某策略/近 N 年表现”。" },
-  { id: "b_slots", lane: "B 单工具", kind: "process", x: 535, y: 792, w: 170, h: 76, title: "槽位抽取", meta: "symbol / strategy / dates / capital", tech: "JSON schema + NER + Memory fill", detail: "槽位：symbol、strategy_id、start_date、end_date、initial_capital、commission、slippage、data_source、trade_preview_count。缺省策略可用 BOLLStrategy。" },
-  { id: "b_clarify", lane: "B 单工具", kind: "gate", x: 720, y: 792, w: 160, h: 76, title: "多轮补槽", meta: "缺失 / 歧义候选", tech: "Clarifying question + fuzzy match candidates", detail: "缺标的、策略歧义、日期不明确时追问；DeltaFStation 工具支持 strategy_id/data_file 模糊匹配，歧义时返回候选列表。" },
-  { id: "b_call", lane: "B 单工具", kind: "tool", x: 535, y: 902, w: 170, h: 76, title: "构造 API 函数", meta: "run_backtest_auto(args)", tech: "OpenAI function calling + ToolRegistry", detail: "构造工具调用：run_backtest_auto({symbol, strategy_id, start_date, end_date, initial_capital, commission, slippage})。自定义策略先 ensure_strategy。" },
-  { id: "b_eval", lane: "B 单工具", kind: "risk", x: 720, y: 902, w: 160, h: 76, title: "评估返回值", meta: "success / no_match / ambiguous / error", tech: "ToolRunner result parser + retry policy", detail: "解析 result_id、resolved.date_range、summary_metrics、trade_preview；失败时进入追问、重试或人工操作引导。" },
-  { id: "b_render", lane: "B 单工具", kind: "ui", x: 615, y: 1012, w: 180, h: 70, title: "回测结果卡片", meta: "指标表 + 交易预览 + 解释", tech: "Cards / Tables / Chart data", detail: "返回总收益、年化收益、最大回撤、夏普、胜率、盈亏比、交易笔数、最近交易预览，并说明可继续追问。" },
-  { id: "c_entry", lane: "C Workflow", kind: "input", x: 970, y: 692, w: 170, h: 64, title: "标准化任务", meta: "启动策略并监控", tech: "Predefined workflow template", detail: "示例：在策略运行页启动 QMT/paper 策略，并持续监控状态。适合步骤稳定、状态机明确的任务。" },
-  { id: "c_precheck", lane: "C Workflow", kind: "gate", x: 970, y: 792, w: 170, h: 76, title: "账户与权限检查", meta: "paper / broker / ACL", tech: "Account state + risk policy + page context", detail: "检查账户类型、QMT 路径、资金账号、页面上下文、实盘权限；实盘交易只允许解释与模拟，真实下单需拒绝或要求人工。" },
-  { id: "c_data", lane: "C Workflow", kind: "store", x: 1165, y: 792, w: 170, h: 76, title: "数据准备", meta: "yfinance / eastmoney / miniQMT", tech: "DataManager + LiveDataManager", detail: "拉取或复用行情数据，检查标的目录、周期、缺失值、交易日历；实时行情通过 LiveDataManager 或 miniQMT gateway。" },
-  { id: "c_engine", lane: "C Workflow", kind: "tool", x: 970, y: 902, w: 170, h: 76, title: "启动执行引擎", meta: "StrategyEngine / LiveEngine", tech: "deltafq LiveEngine + strategy loader", detail: "加载策略类，启动 paper 或 broker 策略。broker 模式会断开交易页已有 QMT 连接，避免会话互斥冲突。" },
-  { id: "c_trade", lane: "C Workflow", kind: "tool", x: 1165, y: 902, w: 170, h: 76, title: "工具与交易动作", meta: "信号 / 下单 / 撤单 / 快照", tech: "BrokerEngine + SimulationEngine + REST API", detail: "paper 走 SimulationEngine tick 撮合；broker 走 miniQMT 双网关。策略运行中交易页手动 connect/下单返回 409。" },
-  { id: "c_monitor", lane: "C Workflow", kind: "process", x: 970, y: 1012, w: 170, h: 76, title: "监控与日志", meta: "SSE / polling / K线", tech: "SSE live console + GET state APIs", detail: "持续读取策略状态、资金持仓、订单成交、K 线和运行日志；异常时触发停止、撤单建议或人工介入。" },
-  { id: "c_persist", lane: "C Workflow", kind: "store", x: 1165, y: 1012, w: 170, h: 76, title: "停机持久化", meta: "engine_state / broker snapshot", tech: "sim_persistence + engine_snapshot", detail: "paper 停止时写 engine_state、orders、trades 并恢复 order_counter；broker 不把柜台快照当 paper state 写入，权威来源是 miniQMT。" },
-  { id: "d_entry", lane: "D Plan", kind: "input", x: 1420, y: 692, w: 185, h: 64, title: "复杂开放式意图", meta: "找稳健 ETF 策略并给建议", tech: "Complex intent detector", detail: "典型复杂意图：比较多个 ETF/策略，生成候选策略，回测、评估风险、解释适用市场，并给出非实盘建议。" },
-  { id: "d_plan", lane: "D Plan", kind: "plan", x: 1420, y: 792, w: 185, h: 76, title: "Plan 任务拆解", meta: "Planning + constraints", tech: "Planner prompt + tool availability + risk policy", detail: "拆解为：澄清约束、检索资料、生成/选择策略、拉取数据、并行回测、比较指标、反思风险、生成报告。" },
+  { id: "b_entry", lane: "B 单工具", kind: "input", x: 535, y: 692, w: 170, h: 64, title: "最高频工具意图", meta: "舆情/消息面分析", tech: "Intent=run_sentiment_analysis", detail: "选择补充文本中的最高频工具意图：用户问“某股票最近消息面、新闻、舆情、情绪、重大事件怎么样”。" },
+  { id: "b_slots", lane: "B 单工具", kind: "process", x: 535, y: 792, w: 170, h: 76, title: "槽位抽取", meta: "stock / days / keywords / source", tech: "JSON Schema + NER + 股票代码映射", detail: "必要槽位：stock_code、stock_name、days、include_cctv、keywords、output_dir、use_llm。缺 days 默认近 7 天，缺 keywords 使用股票名 + 行业关键词。" },
+  { id: "b_clarify", lane: "B 单工具", kind: "gate", x: 720, y: 792, w: 160, h: 76, title: "多轮补槽", meta: "股票歧义 / 时间范围 / 数据源", tech: "Clarifying question + candidate picker", detail: "股票简称歧义、用户关注行业不是个股、时间范围过长、新闻量太大或数据源不可用时，追问或给候选股票，必要时降级只抓新闻。" },
+  { id: "b_call", lane: "B 单工具", kind: "tool", x: 535, y: 902, w: 170, h: 76, title: "构造 API 函数", meta: "news_fetcher + scorer + detector", tech: "Function Call + ToolRegistry + scripts", detail: "构造工具链：news_fetcher.py --stock 002594 --days 7；sentiment_scorer.py --news_file；event_detector.py --use_llm。数据源不可用时换源或限次重试。" },
+  { id: "b_eval", lane: "B 单工具", kind: "risk", x: 720, y: 902, w: 160, h: 76, title: "评估返回值", meta: "news / sentiment / event / confidence", tech: "Tool result parser + source reliability", detail: "检查新闻数量、来源质量、情绪置信度、事件置信度、时效性、冲突数和股票相关性；不可靠时只输出新闻列表或标低置信。" },
+  { id: "b_render", lane: "B 单工具", kind: "ui", x: 615, y: 1012, w: 180, h: 70, title: "舆情结果卡片", meta: "新闻列表 + 情绪表 + 事件卡", tech: "Cards / Tables / Event timeline", detail: "输出消息面总结、来源和时间、情绪分布、重大事件、低置信标记、风险提示与继续追问按钮，不给直接买卖建议。" },
+  { id: "c_entry", lane: "C Workflow", kind: "input", x: 970, y: 692, w: 170, h: 64, title: "标准化任务", meta: "生成投研报告", tech: "Predefined report workflow", detail: "补充文本中的标准 Workflow：确认股票/行业、抓取新闻、情绪打分、事件检测、读取研报/PDF、查询财务数据、查询行情技术指标、生成报告、事实校验、输出 UI。" },
+  { id: "c_precheck", lane: "C Workflow", kind: "gate", x: 970, y: 792, w: 170, h: 76, title: "标的与权限检查", meta: "stock / industry / permission", tech: "Entity linking + ACL + risk policy", detail: "确认股票或行业是否明确；同名股票展示候选；检查内部研报、账户数据、付费数据和敏感字段权限，默认脱敏。" },
+  { id: "c_data", lane: "C Workflow", kind: "store", x: 1165, y: 792, w: 170, h: 76, title: "新闻舆情准备", meta: "news_fetcher / sentiment / event", tech: "web-search + sentiment_scorer + event_detector", detail: "抓取最近新闻，去重，多源验证，情绪打分，重大事件检测；失败时扩大时间范围、换源或降级为新闻摘要。" },
+  { id: "c_engine", lane: "C Workflow", kind: "tool", x: 970, y: 902, w: 170, h: 76, title: "研报财报读取", meta: "read-pdf / RAG / SQL", tech: "OCR + RAG + Text-to-SQL guarded templates", detail: "读取研报/PDF，查询财务指标表，组装 context_pdf + context_sql；指标口径冲突时展示口径并低置信输出。" },
+  { id: "c_trade", lane: "C Workflow", kind: "tool", x: 1165, y: 902, w: 170, h: 76, title: "行情技术指标", meta: "stock-price / MiniQMT / indicators", tech: "实时行情 API + 技术指标脚本", detail: "查询价格、成交、技术指标和更新时间；数据源冲突或价格过期时标注更新时间，禁止 LLM 编造实时价格。" },
+  { id: "c_monitor", lane: "C Workflow", kind: "process", x: 970, y: 1012, w: 170, h: 76, title: "报告生成校验", meta: "LLM report + fact check", tech: "report template + citation validator", detail: "按模板生成投研报告，再做来源、日期、价格、指标、引用和事件时间校验；失败则补检索、重新生成或转人工。" },
+  { id: "c_persist", lane: "C Workflow", kind: "store", x: 1165, y: 1012, w: 170, h: 76, title: "UI输出与回流", meta: "report page / cards / Bad Case", tech: "UI renderer + audit log + feedback loop", detail: "用报告页、表格、新闻列表、情绪卡和风险提示输出；权限不明默认脱敏，失败样本进入 Bad Case 与评测集。" },
+  { id: "d_entry", lane: "D Plan", kind: "input", x: 1420, y: 692, w: 185, h: 64, title: "复杂开放式意图", meta: "贵州茅台 + 五步法", tech: "Complex intent detector + analyst framework", detail: "典型复杂意图：帮我研究贵州茅台，从国泰君安五步法角度分析催化剂、未来机会和置信度。" },
+  { id: "d_plan", lane: "D Plan", kind: "plan", x: 1420, y: 792, w: 185, h: 76, title: "Plan 任务拆解", meta: "12-step TaskChain", tech: "Planner prompt + LangGraph state", detail: "拆解为：识别股票和框架、检索研报、检索财报、检索新闻事件、提取催化剂、分析变量传导、查历史案例、判断市场结构、交易表达风控、列失效条件、生成置信度、输出报告。" },
   { id: "d_chain", lane: "D Plan", kind: "plan", x: 1630, y: 792, w: 190, h: 76, title: "TaskChain 旁路", meta: "任务队列 / 依赖 / 状态", tech: "DAG task state + scratchpad", detail: "旁边显式维护任务链：每个 task 有输入、依赖、工具、输出、状态、失败策略，方便可视化和可恢复执行。" },
-  { id: "d_exec", lane: "D Plan", kind: "tool", x: 1420, y: 902, w: 185, h: 76, title: "Executor 循环", meta: "检查槽位 → 工具执行 → 回注", tech: "ReAct loop + ToolRunner max rounds", detail: "每个子任务先检查槽位，缺失则追问；完整则调用 RAG、SQL、ensure_strategy、run_backtest_auto、数据 API 等工具。" },
+  { id: "d_exec", lane: "D Plan", kind: "tool", x: 1420, y: 902, w: 185, h: 76, title: "Executor 循环", meta: "检查槽位 → 工具执行 → 回注", tech: "LangGraph / ReAct loop + ToolRunner", detail: "每个子任务先检查槽位，缺失则追问；完整则调用 RAG、SQL、web-search、stock-price、sentiment-analysis、read-pdf、compare-reports 等工具。" },
   { id: "d_reflect", lane: "D Plan", kind: "plan", x: 1630, y: 902, w: 190, h: 76, title: "Reflect 后置评判", meta: "正确性 / 风险 / 完成度", tech: "Critic model + evidence check + task audit", detail: "评估工具结果是否足以回答，是否存在高风险建议、过拟合、数据不足、参数不合理。必要时重试、补检索或追问。" },
   { id: "d_done", lane: "D Plan", kind: "risk", x: 1518, y: 1012, w: 190, h: 76, title: "完成度验证", meta: "全部子任务完成?", tech: "Task checklist + acceptance criteria", detail: "验证每个子任务均有输出、证据、指标和风险说明；否则返回未完成项或继续规划。" },
   { id: "fallback", lane: "生成兜底", kind: "risk", x: 80, y: 1234, w: 260, h: 76, title: "缺失追问与兜底", meta: "ask / guide / handoff / refuse", tech: "Fallback policy + human handoff", detail: "缺少关键槽位、证据不足、工具失败或高风险时，选择追问、操作引导、转人工、低风险回答或拒答。" },
-  { id: "mcp", lane: "生成兜底", kind: "tool", x: 430, y: 1234, w: 300, h: 76, title: "MCP 统一挂载层", meta: "Model Context Protocol", tech: "FastMCP stdio + TOOLS_MAP adapter", detail: "工具统一通过 MCP/ToolRegistry 暴露：run_backtest、ensure_strategy、run_backtest_auto、数据/交易/策略 API。B/C/D 都可复用同一工具层。" },
-  { id: "generate", lane: "生成兜底", kind: "process", x: 820, y: 1234, w: 260, h: 76, title: "大模型整合生成", meta: "答案 / 报告 / 操作引导", tech: "LLM synthesis + structured prompt", detail: "聚合 RAG 证据、SQL 结果、工具返回、风险结论，生成可解释的投研回答、回测报告或下一步操作。" },
+  { id: "mcp", lane: "生成兜底", kind: "tool", x: 430, y: 1234, w: 300, h: 76, title: "MCP 统一挂载层", meta: "Model Context Protocol", tech: "FastMCP stdio + TOOLS_MAP adapter", detail: "工具统一通过 MCP/ToolRegistry 暴露：web-search、stock-price、sentiment-analysis、financial-analysis、investment-research、read-pdf、compare-reports、news_fetcher、sentiment_scorer、event_detector 等。B/C/D 都可复用同一工具层。" },
+  { id: "generate", lane: "生成兜底", kind: "process", x: 820, y: 1234, w: 260, h: 76, title: "大模型整合生成", meta: "问答 / 报告 / 舆情 / 风险提示", tech: "LLM synthesis + context_pdf + context_sql", detail: "聚合 RAG 证据、SQL 结果、新闻事件、情绪分数、工具返回、风险结论，生成投研问答、财报问答、研报总结、舆情总结、投研报告、研报 Diff、催化剂分析和晨会简报。" },
   { id: "risk", lane: "生成兜底", kind: "risk", x: 1170, y: 1234, w: 250, h: 76, title: "后处理与风控", meta: "合规拦截 / 引用校验", tech: "Policy checker + citation validator + PII guard", detail: "拦截无证据承诺、收益保证、实盘指令、越权账户信息；确保引用可追溯，必要时加风险提示。" },
   { id: "ui", lane: "生成兜底", kind: "ui", x: 1510, y: 1234, w: 260, h: 76, title: "前端表达引擎", meta: "Cards / Tables / Lists / Charts", tech: "UI visuals renderer + SSE streaming", detail: "根据结构化参数渲染卡片、表格、列表、指标图、K 线、交易预览和操作按钮；文本回答与结构化 UI 同步输出。" }
 ];
@@ -736,10 +736,10 @@ const flows = {
   offline: ["1 离线知识库构建", "从上传到入库：上传、解析、分块、标签、结构化抽取，并进入向量库、SQL 库和分类目录。"],
   route: ["2 路由前", "用户输入经过 Memory、Query 改写、精准缓存、意图识别、置信度阈值和前置风控，再分发到 A/B/C/D。"],
   rag: ["A 知识查找 · RAG", "三层问答：精准问答、结构化查询、混合检索。进阶 pipeline 包含改写、召回、重排、上下文打包和证据校验。"],
-  tool: ["B 单一工具调用", "最高频工具意图为策略回测：抽槽、补槽、构造 run_backtest_auto API、执行工具、评估返回并渲染指标卡。"],
-  workflow: ["C 多步骤标准化路径 · Workflow", "以策略运行为样例：账户检查、数据准备、启动引擎、交易动作、监控日志、停机持久化，每步都有明确技术实现。"],
-  plan: ["D Plan 自主规划", "复杂意图先拆解 Plan 与 TaskChain，再由 Executor 循环调用工具，Reflect 后置评判，直到完成度验证通过。"],
-  post: ["7 生成、后处理、兜底", "MCP 工具层回传结果后，大模型聚合生成，经过引用校验、合规风控、缺失追问和 UI 表达引擎渲染。"]
+  tool: ["B 单一工具调用", "最高频工具意图为舆情/消息面分析：抽槽、补槽、构造 news_fetcher + sentiment_scorer + event_detector 工具链，评估结果可信度并渲染舆情卡片。"],
+  workflow: ["C 多步骤标准化路径 · Workflow", "以生成投研报告为样例：确认标的、抓新闻、情绪打分、事件检测、读研报/PDF、查财务 SQL、查行情指标、生成报告、事实校验、输出 UI。"],
+  plan: ["D Plan 自主规划", "复杂意图“贵州茅台 + 国泰君安五步法”先拆 12 步 TaskChain，再由 Executor 调 RAG/SQL/工具，Reflect 后置评判，直到完成度验证通过。"],
+  post: ["7 生成、后处理、兜底", "MCP 工具层回传结果后，大模型聚合生成，经过事实依据、投资建议风险、事实校验、检查 Agent、Bad Case 回流与 UI 表达引擎渲染。"]
 };
 
 const kindLabels = {
@@ -755,13 +755,116 @@ const kindLabels = {
 };
 
 const drawingRequirements = [
-  ["离线知识库构建", "从上传到入库的全部流程；知识库有哪些分类", "分块策略、元数据/标签体系、结构化数据抽取", "上传、解析、分块、标签、结构化抽取、向量库、关系库、分类目录均已画出"],
-  ["路由前", "所有节点；有哪些意图；意图识别技术实现方式", "不同置信度阈值，后续怎么走", "用户提问、Memory、Query 改写、缓存、意图识别、置信度阈值、动态路由、前置风控均已画出"],
-  ["A 知识查找 RAG", "三层问答策略、进阶版完整 RAG pipeline、每个节点技术实现", "业务化检索策略", "L1 精准问答、L2 结构化查询、L3 混合检索、重排、上下文打包、证据校验均已画出"],
-  ["B 单一工具调用", "最高频工具意图的槽位、多轮槽位提取、构造 API 函数调工具流程", "工具失败与候选处理", "运行策略回测的槽位抽取、多轮补槽、run_backtest_auto、返回值评估、结果卡片均已画出"],
-  ["C Workflow", "全流程所有节点，每个节点技术实现方式", "运行中监控与状态持久化", "账户检查、数据准备、执行引擎、交易动作、监控日志、停机持久化均已画出"],
-  ["D Plan 自主规划", "典型复杂意图 + 流程图", "TaskChain 旁路", "复杂 ETF/策略建议意图、Plan 拆解、TaskChain、Executor、Reflect、完成度验证均已画出"],
-  ["生成、后处理、兜底", "生成、后处理、兜底闭环", "全场景兜底矩阵", "缺失追问、MCP、LLM 生成、后处理风控、前端表达均已画出并补充矩阵"]
+  ["离线知识库构建", "从上传到入库的全部流程；知识库有哪些分类", "分块策略、元数据/标签体系、结构化数据抽取", "覆盖研报/财报/新闻/股市社区/PDF/skill.md/scripts/历史问答/用户反馈上传，验入、解析、SQL结构化、Chunking、Metadata、Embedding、向量库、SQL库、离线评测、发布均已呈现"],
+  ["路由前", "所有节点；有哪些意图；意图识别技术实现方式", "不同置信度阈值，后续怎么走", "补充 Memory、Query 清洗/改写、Entity/Slot/Risk、精准缓存、角色判断、Tool/Skill 匹配、置信度路由；意图覆盖投研问答、财报查询、研报分析、舆情、事件、行情、报告、Skill 创建、复杂规划"],
+  ["A 知识查找 RAG", "三层问答策略、进阶版完整 RAG pipeline、每个节点技术实现", "业务化检索策略", "L1 精准 QA/缓存、L2 SQL 结构化查询、L3 研报/财报/新闻 RAG 混合检索；进阶 pipeline 覆盖 Query Rewrite、Decomposition、Retrieval、SQL/API、Tool Call、Hybrid Retrieval、Rerank、Context、Generation、Evaluation、UI"],
+  ["B 单一工具调用", "最高频工具意图的槽位、多轮槽位提取、构造 API 函数调工具流程", "工具失败与候选处理", "按补充文本改为 run_sentiment_analysis：stock_code、stock_name、days、include_cctv、keywords、output_dir、use_llm；多轮补槽、构造 news_fetcher/sentiment_scorer/event_detector、评估工具结果、舆情卡片均已呈现"],
+  ["C Workflow", "全流程所有节点，每个节点技术实现方式", "标准报告工作流", "按补充文本改为 10 步投研报告 Workflow：确认股票/行业、抓新闻、情绪打分、事件检测、读研报/PDF、查财务 SQL、查行情技术指标、生成报告、事实校验、输出 UI"],
+  ["D Plan 自主规划", "典型复杂意图 + 流程图", "TaskChain 旁路", "典型复杂意图改为“贵州茅台 + 国泰君安五步法”，TaskChain 拆 12 个任务，并保留分析师-交易员-风控官协同、Executor、Reflect、完成度验证"],
+  ["生成、后处理、兜底", "生成、后处理、兜底闭环", "全场景兜底矩阵", "补充投研问答、财报问答、研报总结、舆情总结、情绪评分、事件分析、投研报告、研报 Diff、催化剂分析、晨会简报；事实依据、投资建议风险、事实校验、检查 Agent、Bad Case 回流均已呈现"]
+];
+
+const businessCoverage = [
+  ["协同架构", "分析师 Agent、交易员 Agent、风控官 Agent、检查 Agent、人工最终复核", "路由前角色判断 + D Plan 协同 + 生成后处理复核"],
+  ["业务场景", "投研问答、财报问答、研报分析、舆情监控、事件检测、市场情绪分析、投研报告、策略辅助、工具调用、风险提示", "A/B/C/D/生成兜底矩阵分别承接"],
+  ["数据来源", "财报、研报、新闻数据、股市社区、公告、PDF、skill.md、scripts、历史问答、Bad Case、用户反馈", "离线入库分类目录 + 元数据标签 + 业务补充表"],
+  ["数据处理", "PDF 解析、文本向量化、向量数据库、SQL 结构化查询、舆情情感分析", "离线入库、A RAG、B 工具调用、C Workflow 节点体现"],
+  ["模型与工具层", "Prompt 工程、Function Call、RAG 检索增强、大模型、MCP、ToolRegistry、skill.md + scripts", "MCP 统一挂载层 + Function Call 工具构造 + RAG pipeline"],
+  ["工具/Skill", "web-search、stock-price、sentiment-analysis、financial-analysis、investment-research、read-pdf、compare-reports、news_fetcher、sentiment_scorer、event_detector、market_fear_index、polymarket_monitor", "B 单工具、C Workflow、D Plan 工具层和补充矩阵体现"],
+  ["上下文融合", "context_pdf + context_sql + 工具返回 + 新闻事件 + 情绪分数 + 用户 Memory", "A RAG 上下文打包、C 报告生成校验、生成后处理体现"],
+  ["质量闭环", "事实校验、检查 Agent、人工复核、投资建议风险、Bad Case 回流", "后处理风控、缺失追问与兜底、要求矩阵自查体现"]
+];
+
+const offlineJudgments = [
+  ["J1 可读取", "file_exists、格式支持、PDF/表格/MD/script/API 可读", "换 OCR/PDF 解析器，保留可读部分，低质量资料不作强引用，人工复核"],
+  ["J2 类型识别", "研报、财报、新闻、公告、社区、操作手册、skill.md、script、历史问答、Bad Case", "多标签归类、LLM + 规则分类、只入库不作高置信结论"],
+  ["J3 权限敏感", "内部研报、账户信息、交易指令、未公开信息、付费数据、API Key", "权限标签、字段脱敏、禁止外发、审计、默认按敏感处理"],
+  ["J4 财报字段", "stock_code、report_period、revenue、net_profit、roe、pe、pb、cash_flow、source_page", "单位标准化、口径标注、低置信字段不进强结论"],
+  ["J5 研报观点", "核心观点、投资逻辑、风险因素、相关标的、结论、引用页", "多来源对比，展示观点分歧，不输出唯一结论"],
+  ["J6 新闻舆情可信", "来源、时间、标题、正文、相关股票、事件类型、rumor_risk", "多源交叉验证、来源分级、降低情绪权重、待验证标记"],
+  ["J7 Skill 定义", "name、description、input_schema、script_path、output_schema、examples、limitations、error_handling", "不完整则只作为知识说明，不允许执行，记录 skill_bad_case"],
+  ["J8 Script 可执行", "path、dependency、schema、api_key、dry_run、timeout、return_schema", "不调用、换备用工具、降级 RAG/手动分析、修复后重测"],
+  ["J9 分块上下文", "chunk_size、overlap、标题完整、表格完整、source_page、parent_child_mapping", "标题层级重切、表格单独处理、父子 Chunk 双索引"],
+  ["J10 元数据完整", "source、stock_code、report_date、event_type、sentiment_score、skill_name、tool_name、permission、confidence、update_time", "自动补全、unknown 标记、metadata_conflict、人审"],
+  ["J11 Embedding/入库", "embedding 成功、向量维度、向量写入、SQL写入、文档库、chunk_id、metadata mapping", "部分成功入库，失败重试，异常批次禁止上线"],
+  ["J12 离线评测", "retrieval_recall、rerank_accuracy、citation_accuracy、sql_accuracy、tool_success_rate、sentiment_accuracy、hallucination、permission leakage", "灰度/只读上线，禁止强结论，回流 Bad Case"]
+];
+
+const routeJudgments = [
+  ["Memory", "是否依赖持仓、关注股票、上一轮研报、分析框架、用户偏好", "读取当前股票/研报/框架；冲突则降权旧 Memory 并让用户确认"],
+  ["Query 完整性", "stock_code、行业、时间范围、数据源、输出格式、分析框架、风险偏好", "缺股票/时间/数据源/格式时追问或默认近 7 天、研报+新闻+财报+行情"],
+  ["角色判断", "分析师、交易员、风控官或多智能体协同", "分析师做财报/研报/舆情/事件/报告；交易员查行情/技术指标/工具；风控官审风险和权限"],
+  ["投资/交易风险", "买卖语言、仓位、收益承诺、实盘/自动交易", "转风控官，降低确定性，不给收益承诺，交易动作转二次确认"],
+  ["实时数据", "最新、最近、现在、今天、行情、新闻、账户数据", "调用 web-search/stock-price/news_fetcher，标注更新时间，不编造实时数据"],
+  ["精准缓存", "query_hash、股票、时间范围、资料版本、更新时间", "未过期直接返回，过期重新检索并标 stale_cache"],
+  ["意图置信度", "LLM intent、规则、embedding 相似度、tool_schema、slot 完整度、page_context、risk_level", "≥0.85 直达 A/B/C/D；0.60-0.85 二次判断；0.40-0.60 追问；<0.40 给按钮选择"]
+];
+
+const ragAdvancedPipeline = [
+  ["问题样例", "我持有比亚迪，最近消息面怎么样？", "股票=002594；最近=默认近 7 天；消息面=新闻+舆情+公告+社区+事件检测"],
+  ["Query Decomposition", "Q1 新闻；Q2 公告/事件；Q3 情绪；Q4 市场关注；Q5 行情技术指标；Q6 投资建议风险", "把复杂问题拆成可检索、可查 SQL、可调工具的小问题"],
+  ["Retrieval", "web-search、news_fetcher、RAG 历史研报、财报、新闻库", "结合向量、关键词、元数据过滤和权限过滤"],
+  ["SQL/API", "新闻事件表、情绪分数、股票价格、历史工具结果", "结构化结果与非结构化证据一起进入 context"],
+  ["Tool Call", "sentiment_scorer、event_detector、stock-price", "工具返回进入 Observation 和 Evaluation"],
+  ["Hybrid + Rerank", "SQL 结构化结果 + 新闻文本 + 研报 chunk + 工具返回；优先最近日期、权威来源、股票代码、事件类型", "解决召回片段冲突和时效问题"],
+  ["Generation + Evaluation", "消息面总结、事件列表、情绪判断、风险提示；校验新闻来源、日期、股票代码、价格数据、直接买卖建议风险", "通过后输出舆情卡、新闻列表、情绪表、事件卡"]
+];
+
+const singleToolSentimentFlow = [
+  ["B1 工具意图", "是否明确要求消息面/新闻/舆情/重大事件/市场情绪", "YES 进入槽位；NO 分流到 A-RAG/SQL、C-Workflow、D-Plan 或 stock-price"],
+  ["B2 槽位", "stock_code、stock_name、days、include_cctv、keywords、output_dir、use_llm", "缺参追问、股票名映射、默认近 7 天、关键词补行业词"],
+  ["B3 数据源", "web_search、news_source、api_key、network、quota、source_reliability", "换源、等待、重试、只展示可用来源"],
+  ["B4 新闻抓取", "news_count、title、source、publish_time、content、related_stock", "去重、多源验证、低置信、只输出新闻列表"],
+  ["B5 情绪打分", "score、label、score_range、confidence、scored_count", "规则 + LLM 双评估，输出分歧，降低情绪权重"],
+  ["B6 事件检测", "event_type、event_time、subject、impact_level、confidence", "展示原文，标低置信，多源验证，不给交易建议"],
+  ["B7 可信评估", "source_count、source_quality、sentiment_confidence、event_confidence、recency、conflict_count", "可靠则生成总结；不可靠则只列新闻/提示资料不足/Bad Case 回流"]
+];
+
+const workflowReportSteps = [
+  ["1 确认股票/行业", "Entity 识别 / 股票代码映射 / 行业映射", "不明确则追问或展示候选股票"],
+  ["2 抓取新闻", "web-search / news_fetcher / 数据源 API", "未抓到则扩大时间范围或换源"],
+  ["3 情绪打分", "sentiment_scorer / LLM 辅助分类", "失败降级为新闻摘要，多篇冲突则输出分布"],
+  ["4 事件检测", "event_detector / 规则 + LLM", "未检测到则标记暂无重大事件，真假不明则展示原文"],
+  ["5 读取研报/PDF", "read-pdf / OCR / RAG", "无可用研报则提示上传或跳过研报部分"],
+  ["6 查财务 SQL", "SQL / API / 财报结构化表", "字段缺失改 RAG 解释或提示缺字段"],
+  ["7 查行情技术指标", "stock-price / MiniQMT / 技术指标脚本", "价格过期或来源冲突则标注更新时间"],
+  ["8 生成报告", "LLM + 报告模板 + context_pdf + context_sql", "无依据则补检索或降级摘要"],
+  ["9 事实校验", "来源/日期/价格/指标/引用校验", "失败则重新生成或转人工"],
+  ["10 输出 UI", "报告页 + 表格 + 卡片 + 新闻列表 + 风险提示", "权限不明默认脱敏，只展示安全内容"]
+];
+
+const planTaskchain = [
+  ["T1", "识别股票和分析框架", "股票/框架是否明确；框架未入库则使用通用催化剂分析框架"],
+  ["T2", "检索研报", "有相关研报则进入财报；过旧或冲突则展示观点分歧"],
+  ["T3", "检索财报", "财报数据可用则进入新闻事件；口径冲突则标注口径"],
+  ["T4", "检索新闻和事件", "最近事件可用则提取催化剂；真假不明则多源验证"],
+  ["T5", "提取催化剂", "按正向/负向/不确定分类"],
+  ["T6", "分析变量传导路径", "证据不足标记为假设并降低置信度"],
+  ["T7", "查历史类似案例", "相似度低则只作为参考"],
+  ["T8", "判断市场结构", "行情与事件冲突时展示多种情景"],
+  ["T9", "给交易表达方式", "涉及直接买卖建议转风控官 Agent 审查"],
+  ["T10", "列失效条件", "无法列出则补通用风险并降低置信"],
+  ["T11", "生成置信度", "证据不足不输出数值，只输出等级或分项置信度"],
+  ["T12", "输出投研报告", "必须通过事实、引用、风险校验，否则重生成或人工复核"]
+];
+
+const generationChecks = [
+  ["G1 事实依据", "citation_exists、source_traceable、sql_result、tool_result、news_source、report_page、hallucination_score", "无依据则删除、补检索、改不确定或请求上传资料"],
+  ["G2 投资建议风险", "买卖语言、确定性表达、收益承诺、仓位建议、实盘交易", "加风险提示、降低确定性、不提供直接买卖指令、必要时拒答/转人工"],
+  ["G3 事实校验", "日期、股票代码、价格来源、财务指标、新闻来源、引用、报告日期、一致性", "失败则重新查询/生成，展示冲突来源，不输出唯一结论"],
+  ["G4 检查 Agent", "复杂度、风险、工具调用次数、来源冲突、金融影响、实盘相关", "启动检查 Agent 校验事实、引用、逻辑和风险，冲突则转人工最终复核"],
+  ["G5 Bad Case 回流", "用户负反馈、RAG miss、SQL error、tool_failed、hallucination、citation_error、wrong_route、fact_check_failed", "记录失败类型，写入回流库，补评测集，优化分块/工具/Prompt/路由"]
+];
+
+const finalAudit = [
+  ["离线知识库", "已覆盖", "主图展示上传→解析→分块→标签→结构化→向量库/SQL库/分类目录；矩阵补充 J1-J12、Skill/script、财报/研报/新闻/舆情/Bad Case 入库判断"],
+  ["路由前", "已覆盖", "主图展示用户提问、Memory、Query 改写、缓存、意图识别、阈值、动态路由、前置风控；矩阵补充角色判断、实时数据、缓存、置信度分层"],
+  ["A RAG", "已覆盖", "三层问答 + Query Rewrite、Decomposition、Hybrid Retrieval、SQL/API、Tool Call、Rerank、Context、Generation、Evaluation、UI"],
+  ["B 单工具", "已覆盖", "按补充文本落为 run_sentiment_analysis，包含槽位、多轮补槽、Function Call、数据源检查、新闻抓取、情绪打分、事件检测、结果可信评估"],
+  ["C Workflow", "已覆盖", "按补充文本落为生成投研报告 10 步：股票/行业、新闻、情绪、事件、研报/PDF、财务 SQL、行情指标、报告生成、事实校验、UI"],
+  ["D Plan", "已覆盖", "贵州茅台 + 国泰君安五步法复杂意图，12 步 TaskChain，包含催化剂、变量传导、历史案例、市场结构、交易表达风控、失效条件和置信度"],
+  ["生成/后处理/兜底", "已覆盖", "覆盖投研问答、财报问答、研报总结、舆情总结、事件分析、报告、Diff、晨会简报；补事实依据、投资建议风险、事实校验、检查 Agent、Bad Case 回流"],
+  ["补充文档业务项", "已覆盖", "分析师-交易员-风控官协同、Agent + Skills、RAG/SQL、财报/研报/舆情、Function Call、LangGraph 多智能体、人工最终复核均已进入矩阵和节点补充"]
 ];
 
 const fallbackStrategies = [
@@ -900,19 +1003,21 @@ function supplementText(node) {
     guardpre: "安全风控：投资建议、隐私、改数据、发消息等高风险动作必须拒答、只读、二次确认或人工审批。",
     a_retrieve: "RAG pipeline 补充：Query Rewrite、Hybrid Retrieval、Metadata filter、TopK、Rerank、Context pack、Citation check。",
     a_eval: "输出生成兜底：引用缺失、格式错、过度承诺、幻觉时，重新生成、引用校验、降级输出。",
-    b_slots: "槽位缺失兜底：用户没说预算、时间、公司、指标等关键参数时，追问补槽，不执行高风险动作。",
-    b_clarify: "多轮补槽：对缺失槽位、歧义候选和权限缺口分别追问，回到 Query 理解后再执行。",
-    b_call: "工具调用兜底：工具不存在、参数错、权限不足、返回空时，修参数、限次重试、换工具或转人工。",
-    b_eval: "工具返回评估：success、no_match、ambiguous、error 必须分支处理，失败回到当前执行节点。",
-    c_precheck: "Workflow 判断：计划是否可执行、工具是否可靠、推荐是否安全；涉及实盘必须人工确认或拒绝。",
-    c_monitor: "运行监控兜底：SSE/polling 失败时降级为轮询或部分返回，并记录日志进入 Bad Case。",
-    d_plan: "Agent 规划兜底：任务过大、步骤过多或依赖关系错时，缩小目标、拆原子任务、限制轮次。",
+    b_entry: "单工具主线按补充文本改为 run_sentiment_analysis，用于股票消息面、新闻舆情、情绪、重大事件与市场情绪分析。",
+    b_slots: "槽位缺失兜底：缺 stock_code、stock_name、days、keywords、output_dir、use_llm 时，先股票名映射或追问；缺 days 默认近 7 天。",
+    b_clarify: "多轮补槽：股票简称歧义、时间范围过长、数据源不可用、新闻量过大时，给候选、缩小范围或降级只抓新闻。",
+    b_call: "工具调用兜底：news_fetcher、sentiment_scorer、event_detector 任一脚本失败时，换源、限次重试、只展示可用来源或转人工。",
+    b_eval: "工具返回评估：检查 news_count、source_quality、sentiment_confidence、event_confidence、recency、conflict_count，低置信则只列新闻并回流 Bad Case。",
+    c_precheck: "Workflow 判断：股票/行业是否明确、权限是否允许、内部研报/账户数据是否需脱敏；不明确则追问或展示候选股票。",
+    c_monitor: "报告生成校验：来源、日期、价格、财务指标、引用和事件时间必须可校验；不通过则补检索、重生成或转人工。",
+    d_entry: "复杂意图样例来自补充文本：贵州茅台 + 国泰君安五步法，目标是催化剂、未来机会和置信度分析。",
+    d_plan: "Agent 规划兜底：12 步 TaskChain 中任一任务证据不足，都要标低置信、展示分歧、补检索或转人工。",
     d_chain: "TaskChain 旁路：每个 task 记录输入、依赖、工具、输出、状态和失败策略，便于恢复执行。",
     d_reflect: "Reflection 评估：判断当前执行是否正确、是否有风险、是否完成，必要时补检索、重试或转人工。",
     fallback: "兜底策略总览：追问补槽、重试、换路径、降级、拒答、转人工、回流优化。",
     mcp: "MCP 判断：工具是否可用，JSON/参数是否合法，失败时是否重试或转人工。",
-    generate: "统一生成：只能基于已知证据、缓存或安全模板输出，不能过度承诺。",
-    risk: "后处理风控：引用校验、PII guard、收益保证拦截、越权账户信息拦截，失败进入兜底。",
+    generate: "统一生成：必须融合 context_pdf、context_sql、新闻事件、情绪分数和工具返回；无证据内容删除或降级为不确定。",
+    risk: "后处理风控：事实依据、投资建议风险、事实校验、检查 Agent、Bad Case 回流五类检查必须覆盖。",
     ui: "前端表达：卡片、表格、列表、图表输出前做格式校验，失败降级为文本或模板输出。"
   };
   if (byId[node.id]) return byId[node.id];
@@ -1104,6 +1209,43 @@ function openSupplementDrawer() {
       <h3>画图要求自查</h3>
       <p class="drawer-section-note">对应你给出的 7 项画图要求，说明当前流程图里已经出现的节点与判断。</p>
       ${renderDrawerTable(["模块", "必写", "可选", "当前呈现"], drawingRequirements, "画图要求自查")}
+    </section>
+    <section class="drawer-section">
+      <h3>最终自查结论</h3>
+      ${renderDrawerTable(["检查项", "状态", "覆盖说明"], finalAudit, "最终自查结论")}
+    </section>
+    <section class="drawer-section">
+      <h3>业务补充文档覆盖</h3>
+      <p class="drawer-section-note">来自补充文本：分析师 - 交易员 - 风控官协同架构，覆盖 Agent + Skills / RAG / SQL / 财报问答 / 研报分析 / 舆情监控 / Function Call / LangGraph 多智能体。</p>
+      ${renderDrawerTable(["覆盖项", "补充文档内容", "落图位置"], businessCoverage, "业务补充文档覆盖")}
+    </section>
+    <section class="drawer-section">
+      <h3>离线知识库构建判断</h3>
+      ${renderDrawerTable(["判断", "判断依据", "兜底/回流"], offlineJudgments, "离线知识库构建判断")}
+    </section>
+    <section class="drawer-section">
+      <h3>路由前判断</h3>
+      ${renderDrawerTable(["节点", "判断内容", "后续怎么走"], routeJudgments, "路由前判断")}
+    </section>
+    <section class="drawer-section">
+      <h3>A RAG 进阶 Pipeline 示例</h3>
+      ${renderDrawerTable(["阶段", "内容", "技术/判断"], ragAdvancedPipeline, "A RAG 进阶 Pipeline 示例")}
+    </section>
+    <section class="drawer-section">
+      <h3>B 单工具：舆情分析 Function Call</h3>
+      ${renderDrawerTable(["节点", "判断/槽位", "动作"], singleToolSentimentFlow, "B 单工具舆情分析")}
+    </section>
+    <section class="drawer-section">
+      <h3>C Workflow：生成投研报告</h3>
+      ${renderDrawerTable(["步骤", "技术实现", "判断与兜底"], workflowReportSteps, "C Workflow 生成投研报告")}
+    </section>
+    <section class="drawer-section">
+      <h3>D Plan：贵州茅台五步法 TaskChain</h3>
+      ${renderDrawerTable(["任务", "内容", "判断与兜底"], planTaskchain, "D Plan TaskChain")}
+    </section>
+    <section class="drawer-section">
+      <h3>生成、后处理、兜底检查</h3>
+      ${renderDrawerTable(["检查", "判断依据", "兜底动作"], generationChecks, "生成后处理兜底检查")}
     </section>
     <section class="drawer-section">
       <h3>兜底策略总览</h3>
