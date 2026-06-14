@@ -257,6 +257,7 @@
     right: 16px;
     bottom: 16px;
     padding: 14px 15px;
+    pointer-events: none;
   }
   #detail h2 {
     margin: 0 0 4px;
@@ -293,6 +294,11 @@
     display: none;
   }
   #flowcap.show { display: block; }
+  body.inline-open #detail,
+  body.inline-open #flowcap {
+    opacity: 0;
+    visibility: hidden;
+  }
   #flowcap .fname {
     color: var(--active);
     font: 700 11px/1 var(--mono);
@@ -371,6 +377,30 @@
     overflow: auto;
     padding: 10px 12px 12px;
   }
+  .judgment-block {
+    margin-top: 11px;
+  }
+  .judgment-title {
+    margin: 0 0 7px;
+    color: var(--ink);
+    font: 700 12px/1.35 var(--sans);
+  }
+  .judgment-card {
+    margin-top: 8px;
+  }
+  .judgment-card:first-of-type {
+    margin-top: 0;
+  }
+  .judgment-name {
+    display: inline-flex;
+    margin-bottom: 6px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 4px 8px;
+    background: var(--surface-2);
+    color: var(--active);
+    font: 700 11px/1 var(--mono);
+  }
   .subtable {
     width: 100%;
     border: 1px solid var(--line);
@@ -388,6 +418,7 @@
     line-height: 1.45;
     vertical-align: top;
   }
+  .subtable tr:last-child th,
   .subtable tr:last-child td {
     border-bottom: 0;
   }
@@ -867,6 +898,56 @@ const finalAudit = [
   ["补充文档业务项", "已覆盖", "分析师-交易员-风控官协同、Agent + Skills、RAG/SQL、财报/研报/舆情、Function Call、LangGraph 多智能体、人工最终复核均已进入矩阵和节点补充"]
 ];
 
+const nodeJudgmentDetails = {
+  upload: [["J1 投研资料是否可读取", "判断研报 PDF、财报、新闻、公告、社区文本、skill.md、scripts、历史问答、用户反馈是否可读取。", "file_exists、file_format_supported、pdf_readable、table_readable、markdown_readable、script_file_readable、api_response_success", "记录 source_id、source_type、upload_time、source_owner，进入资料类型识别。", "PDF 损坏、表格无法解析、新闻链接失效、skill.md/script 不可读、API 失败。", "换 OCR/PDF 解析器，保留可读部分，标记 partial_loaded，低质量资料不作强引用，回到多模态文档验入。"]],
+  parse: [["J2 资料类型是否识别成功", "判断资料属于研报、财报、新闻、公告、股市社区、操作手册、skill.md、script、历史问答还是 Bad Case。", "file_extension、content_keywords、document_layout、financial_table_pattern、news_pattern、skill_yaml_or_md_pattern、script_signature、LLM_doc_classifier_result", "按类型进入研报解析、财务字段抽取、新闻事件抽取、公告结构化、舆情清洗、Skill 解析、脚本参数解析、QA 知识库或 Bad Case 库。", "类型未知、文件名与正文冲突、研报中混财报表格、新闻中混公告。", "多标签归类，LLM + 规则辅助分类，必要时人工复核，只入文档库不用于高置信结论。"]],
+  chunk: [["J9 分块是否保留投研上下文", "判断研报、财报、新闻、skill.md、操作手册切分后是否保留完整语义和引用关系。", "chunk_size、overlap、heading_integrity、table_integrity、report_section_integrity、source_page_mapping、parent_child_mapping", "进入 Embedding，可用于 RAG 检索。", "财报表格被切断、研报观点和风险因素分离、新闻标题和正文分离、Skill 用途和参数分离、引用页码丢失。", "按标题层级重切，表格单独处理，增加 overlap，父子 chunk 双索引，低质量 chunk 不作强引用。"]],
+  metadata: [["J3 是否包含敏感信息或权限限制", "判断资料中是否包含内部研报、账户信息、交易指令、未公开信息、付费数据、API Key 或权限受限内容。", "internal_report_tag、paid_data_source、account_info_detected、trade_instruction_detected、api_key_detected、permission_label、user_role、sensitivity_classifier_result", "打权限标签、字段级脱敏、禁止外发、检索时带权限过滤、写审计日志。", "权限字段缺失、资料来源不明、内外部资料混合、权限冲突、API Key 误入文档。", "默认按敏感资料处理，不进入公开 RAG，不展示原文，提示申请权限或人工审批。"], ["J10 元数据是否完整", "判断资料是否具备可过滤、可追溯、可审计的元数据。", "source、stock_code、related_stock、report_date、event_type、sentiment_score、skill_name、tool_name、permission、confidence、update_time", "写入元数据索引并进入向量化。", "缺 source、stock_code、report_date、confidence、permission、update_time 或字段冲突。", "自动补全可推断字段，无法补全写 unknown，标记 metadata_conflict，不输出强结论。"]],
+  extract: [["J4 财报结构化字段是否完整", "判断财报是否能抽取投研问答和 SQL 查询所需结构化指标。", "stock_code、report_period、revenue、net_profit、gross_margin、roe、roa、pe、pb、debt_ratio、cash_flow、source_page", "写入财务指标表，可用于 SQL 查询，并和 RAG 结果共同组装 context_sql。", "缺股票代码/报告期/关键指标，表格解析失败，格式不标准，单位或口径冲突。", "单位标准化，指标口径标注，保留 source_page，低置信字段不进入强结论，回流财报解析模板。"], ["J5 研报观点是否可抽取", "判断研报是否能抽取核心观点、投资逻辑、风险因素、相关标的、结论和引用来源。", "report_title、report_source、report_date、stock_code、core_viewpoint、investment_logic、risk_factors、conclusion、citation_page", "写入研报元数据表，观点进入向量库，可用于投研报告生成。", "缺来源、日期、观点、风险因素，结论不清，多篇观点冲突或报告过旧。", "多来源对比，标注报告日期，展示观点分歧，不输出唯一结论，转人工复核。"]],
+  vector: [["J11 Embedding 与向量入库是否成功", "判断资料、新闻、财报、研报、Skill、操作说明是否成功向量化并写入向量数据库。", "embedding_response_success、vector_dimension_valid、vector_db_write_success、chunk_id_mapping、metadata_mapping_success", "写入向量数据库并进入一致性校验。", "Embedding 失败、向量维度错、chunk_id 映射异常、权限映射错误、重复入库。", "成功部分入库，失败部分重试，标记 partial_failed，异常批次禁止上线。"]],
+  sql: [["J11 SQL 入库是否成功", "判断结构化字段是否成功写入 SQL，并与文档库/向量库保持一致。", "sql_write_success、document_store_success、metadata_mapping_success、field_schema_valid、index_consistency", "写入关系型数据库，供财报指标、新闻事件、情绪分数、工具结果查询。", "SQL 写入失败、字段缺失、SQL 和向量库不一致、权限映射错误。", "重试或回滚，成功部分入库，失败部分进队列，禁止异常批次上线。"]],
+  kbcat: [["J12 离线评测是否达标", "判断投研 RAG、SQL 查询、Skill 调用、舆情分析、财报问答、报告生成是否满足上线要求。", "retrieval_recall、rerank_accuracy、citation_accuracy、sql_accuracy、tool_success_rate、sentiment_accuracy、event_detection_accuracy、hallucination_rate、permission_leakage_rate、bad_case_pass_rate", "发布到 AI 投研助手，允许 Agent 检索、工具调用和报告生成。", "RAG 召回差、SQL 查询差、工具成功率低、情绪分析不准、引用错误、权限泄漏。", "灰度或只读上线，禁止生成强结论，人工复核，回流 RAG 评测集、工具评测和 Bad Case。"]],
+  user: [["R0 用户 Query 是否进入正确上下文", "判断用户输入是自然语言、快捷指令、页面场景，还是多轮上下文延续。", "query_text、quick_action、page_context、session_id、current_stock、current_report、user_role", "进入 Memory 判断、Query 清洗、Entity/Slot/Risk 识别。", "输入太短、目标过宽、页面上下文和用户问题冲突。", "给按钮选择、追问目标、保留当前页面上下文但不做高风险动作。"]],
+  memory: [["J13 是否需要读取 Memory", "判断问题是否依赖当前持仓、关注股票、上一轮研报、上一轮分析框架、上一轮信号或用户偏好。", "我持有、这家公司、刚才那篇研报、current_stock_code、current_report_id、user_watchlist、session_context", "读取当前股票/研报/框架、输出格式偏好、上一轮工具结果，进入 Query 改写。", "Memory 多股票冲突、上下文过期、用户问题与 Memory 冲突、偏好与安全规则冲突。", "降权旧 Memory，让用户确认股票/框架，实时数据重新获取，高风险动作不使用旧 Memory。"]],
+  rewrite: [["J14 Query 是否完整", "判断投研问答、舆情分析、财报查询、研报分析或报告生成所需信息是否完整。", "stock_code、stock_name、industry、time_range、data_source、output_format、analysis_framework、risk_preference", "进入缓存判断并继续路由。", "缺股票、时间范围、数据源、输出格式、分析框架；股票简称歧义、时间范围非法。", "追问补槽，或默认近 7 天/最新财报期/近一年；默认研报+新闻+财报+行情；说明默认值。"]],
+  cache: [["J18 是否命中精准缓存", "判断相同股票、相同问题、相同时间范围、相同资料版本是否已有可用缓存结果。", "query_hash、stock_code_match、time_range_match、data_version_match、report_version_match、cache_update_time、freshness_policy", "判断缓存未过期后直接返回，并展示更新时间。", "缓存过期、版本不明、最新事件变化、缓存和实时工具冲突。", "不使用旧缓存，重新检索或调工具，标记 stale_cache，输出时说明时效性。"]],
+  intent: [["J19 意图置信度是否足够", "判断用户是要投研问答、研报检索、财报查询、新闻舆情、事件检测、市场情绪、股票价格、投研报告、Skill 创建还是复杂研究规划。", "LLM intent classification、keyword rules、embedding intent similarity、tool_schema_match、slot_completeness、page_context、risk_level", "confidence ≥ 0.85 直接进入 A/B/C/D 路由。", "0.60-0.85 结合 Memory 二次判断；0.40-0.60 追问；<0.40 给按钮选择；多意图混合或工具/RAG 冲突。", "追问、拆任务、降级普通问答，高风险动作转风控，保存为待确认任务。"], ["J15 用户问题属于哪个智能体角色", "判断问题交给分析师 Agent、交易员 Agent、风控官 Agent，还是多智能体协同。", "intent_type、risk_level、tool_needed、output_goal、trade_action_detected、analysis_depth、compliance_requirement", "分析师做财报/研报/舆情/事件/报告；交易员做行情/技术指标/工具；风控官做风险/权限/拒答。", "角色冲突、分析和交易混合、风控和用户意图冲突、多 Agent 结论不一致。", "多智能体协同，输出分歧，请求人工复核，高风险动作转场景2。"]],
+  threshold: [["J19 置信度阈值与后续", "判断意图识别结果是否足以自动路由。", "intent_confidence、slot_completeness、risk_level、tool_schema_match、page_context、memory_consistency", "≥0.85 直接路由 A/B/C/D。", "0.60-0.85 二次判断或追问；0.40-0.60 追问路径；<0.40 不进入 Agent Plan。", "追问用户是查资料、查行情、生成报告还是做舆情；不调用高风险工具。"]],
+  router: [["J15 多智能体与路径路由", "判断应走 A 知识查找、B 单工具、C Workflow、D Plan，或分析师-交易员-风控官协同。", "intent_type、tool_needed、output_goal、risk_level、route_confidence、role_match", "输出路径 A/B/C/D，并附带槽位、证据需求和风险等级。", "角色冲突、工具意图和 RAG 意图冲突、分析和交易混合。", "回到 Query 理解，拆任务，多智能体协同，高风险转风控官 Agent。"]],
+  guardpre: [["J16 是否包含投资建议或交易风险", "判断用户是否要求直接买卖建议、收益承诺、仓位建议、实盘交易或自动交易。", "buy_sell_language、position_language、profit_promise_request、live_trade_action、auto_trade_action、risk_classifier_result", "进入风控官 Agent，降低确定性表达，加风险提示，不给收益承诺。", "用户要求直接买不买、稳赚、自动下单，或投研结论可能被误解为指令。", "转教育性分析，给风险因素，拒绝直接买卖指令，人工复核或场景2二次确认。"]],
+  a_entry: [["A0 知识问答是否需要证据", "判断问题是否是策略解释、指标查询、操作问答、研报观点、财报解释或新闻事件总结。", "evidence_required、citation_required、intent=rag、source_scope、risk_level", "进入三层问答策略：精准 QA、SQL、RAG。", "问题含实时信息、交易建议或权限数据。", "实时问题转工具，权限数据脱敏或拒答，高风险转风控。"]],
+  a_l1: [["A1 是否命中精准 QA", "判断问题是否是固定概念、常见名词、系统操作说明、标准解释。", "FAQ_match、keyword_match、cache_hit、semantic_similarity、confidence_score", "输出标准答案，展示更新时间或来源，结束。", "FAQ 版本过旧、多个口径、标准答案与场景冲突、问题包含实时信息。", "标注版本，进入 RAG 检索，实时问题调用工具，回流更新 FAQ。"]],
+  a_l2: [["A2 是否需要 SQL 结构化查询", "判断问题是否可通过结构化字段回答，如财务指标、新闻事件、情绪分数、工具结果。", "required_field_exists、table_exists、sql_permission、field_definition、metric_version、time_range", "构造 SQL，查询结构化数据库，返回指标表并进入生成解释。", "字段不存在、表不存在、无权限、指标口径不明、SQL 超时、Text-to-SQL 错误。", "用预置 SQL 模板，限制 Text-to-SQL 权限，重试，改走 RAG 解释，标 low_confidence。"]],
+  a_retrieve: [["A3 是否需要 RAG 财报/研报分析", "判断是否需要检索财报、研报、PDF、新闻、历史问答等非结构化文本。", "report_required、pdf_required、news_required、qualitative_analysis_required、citation_required、evidence_required", "PDF 解析、Chunk 检索、Embedding 召回、Rerank、Context 组装、生成带证据答案。", "财报/研报缺失、PDF 解析失败、检索结果低相关、多篇报告观点冲突。", "提示上传资料，扩大检索范围，展示观点分歧，降低结论强度，转人工复核。"]],
+  a_rerank: [["A4 检索结果是否可靠", "判断向量检索、关键词检索、SQL 结果、工具结果是否足够支撑投研结论。", "topk_score、rerank_score、metadata_match、source_reliability、source_freshness、citation_available、conflict_count、permission_passed", "进入上下文压缩、组装 Prompt、生成答案。", "多篇报告冲突、低可信来源、旧资料被召回、无权限资料被召回、TopK 低相关。", "Query 改写、放宽 Metadata、增加关键词检索、查原文、换数据源、输出资料不足。"]],
+  a_pack: [["A5 上下文是否可压缩且可引用", "判断 SQL 结构化结果、新闻文本、研报 chunk 和工具返回是否能组成可追溯上下文。", "context_token_budget、citation_map、source_page、freshness、conflict_count、risk_hint", "生成 context_pdf + context_sql + citation map，进入生成。", "证据太长、引用错位、片段冲突、风险提示缺失。", "Context compression、只保留高置信证据、展示分歧、补检索。"]],
+  a_eval: [["A6 答案证据校验是否通过", "判断回答是否被证据支持，是否存在幻觉、引用缺失或风险表达过强。", "attribution_check、citation_match、hallucination_score、confidence_score、risk_level", "证据通过则进入统一生成/风控。", "证据不足、SQL 和 RAG 冲突、来源低可信、引用缺失。", "追问、返回可查范围、降级为操作引导、重新检索或转人工。"]],
+  b_entry: [["B1 是否为明确舆情分析工具意图", "判断用户是否明确要求查询某股票最近消息面、新闻、舆情、情绪、重大事件。", "消息面、新闻、舆情、重大事件、市场情绪、stock_entity_detected、sentiment_intent_score、tool_schema_match、Intent=run_sentiment_analysis", "进入槽位检查，准备调用 run_sentiment_analysis / sentiment-analysis 工具链。", "财报问题转 A-RAG/SQL；报告生成转 C；复杂研究转 D；价格信号转 stock-price；同时要求交易则转风控。", "先做舆情分析，交易动作转场景2，股票歧义追问，高风险建议加提示或拒答。"]],
+  b_slots: [["B2 槽位是否完整", "判断 run_sentiment_analysis 所需股票、时间、关键词、数据源、输出目录等参数是否齐全。", "stock_code、stock_name、days、include_cctv、keywords、output_dir、use_llm", "构造脚本命令并进入工具调用前检查。", "缺 stock_code/stock_name/days/keywords/output_dir/use_llm，股票简称歧义，行业不是个股，时间范围过长。", "股票名映射，追问，给候选股票，限制时间范围，默认近 7 天，降级只抓新闻。"]],
+  b_clarify: [["B2 多轮补槽是否完成", "判断缺失槽位、歧义候选、时间范围和数据源是否已被用户确认。", "candidate_count、slot_missing、time_range_valid、source_available、user_confirmation", "槽位齐全后进入构造 API 函数。", "用户仍未确认、候选股票过多、新闻量过大、数据源不可用。", "继续追问，缩小范围，给按钮候选，默认近 7 天或降级只抓新闻。"]],
+  b_call: [["B3 工具调用前数据源是否可用", "判断新闻源、行情源、搜索源、API Key、网络环境是否可用。", "web_search_available、news_source_available、api_key_available、network_status、data_source_quota、source_reliability", "调用 news_fetcher，进入新闻结果判断。", "搜索不可用、API Key 缺失、网络不可用、限流、来源低可信。", "换数据源，扩大时间范围，只展示可用来源，标记 source_limited，不生成强结论。"]],
+  b_eval: [["B4-B7 工具结果是否可信", "判断新闻抓取、情绪打分、事件检测和结果可信度是否足够支撑消息面回答。", "news_count、source、publish_time、sentiment_score、event_type、source_quality、recency、conflict_count、stock_relevance", "生成消息面总结、展示来源和时间、给出风险提示。", "新闻为空、正文缺失、情绪打分失败、事件方向不明、多源冲突、来源差。", "去重、多源验证、降低结论强度，只输出新闻列表，标注低置信，请求人工复核并 Bad Case 回流。"]],
+  b_render: [["B8 舆情输出是否可展示", "判断舆情总结、新闻列表、情绪表、事件卡、风险提示是否完整且低风险。", "source_traceable、sentiment_confidence、event_confidence、risk_level、ui_format_valid", "渲染舆情卡、新闻列表、情绪表、事件卡、继续追问按钮。", "来源不足、情绪低置信、事件真假未验证、用户要求买卖建议。", "只展示原文和低置信标签，不给交易建议，进入风控或人工复核。"]],
+  c_entry: [["C0 是否进入标准投研报告 Workflow", "判断用户是否要生成标准投研报告，而不是单次问答或工具查询。", "intent=report、stock_or_industry、analysis_goal、output_format、evidence_required", "进入 10 步报告工作流。", "标的不明确、目标过大、缺输出格式或证据范围。", "追问股票/行业和输出格式，必要时拆分为 A/B/D。"]],
+  c_precheck: [["Step1 股票/行业是否明确", "确认股票或行业是否明确，并检查权限/敏感字段。", "stock_code、stock_name、industry、permission、sensitive_field、user_role", "进入新闻抓取。", "股票简称歧义、多市场同名、内部研报或账户数据权限不明。", "展示候选股票，字段脱敏，默认只展示安全内容，回到 Entity 识别。"]],
+  c_data: [["Step2-4 新闻、情绪、事件是否可用", "判断是否抓到最近新闻、情绪打分是否成功、是否检测到重大事件。", "news_count、source_quality、sentiment_score、event_type、publish_time、duplicate_score", "进入研报/PDF 和财务数据读取。", "未抓到新闻、来源低可信、情绪冲突、事件真假不明。", "扩大时间范围或换源，去重，多源验证，输出情绪分布，不给单一判断。"]],
+  c_engine: [["Step5-6 研报/PDF 与财务 SQL 是否可用", "判断是否有可用研报/PDF，以及财务指标是否可查询。", "pdf_readable、report_available、sql_table_exists、financial_metric_match、metric_version、source_page", "读取研报并查询财务数据，组装 context_pdf + context_sql。", "PDF 解析失败、表格错位、字段缺失、指标口径冲突。", "换解析器，跳过低质量研报，展示口径，改 RAG 解释或提示缺字段。"]],
+  c_trade: [["Step7 行情和技术指标是否可用", "判断行情、价格和技术指标是否可用于报告。", "stock_price_available、update_time、indicator_available、source_consistency、market_status", "进入报告生成。", "价格过期、来源冲突、行情不可用、指标缺失。", "标注更新时间，跳过实时行情部分，不让 LLM 编造价格。"]],
+  c_monitor: [["Step8-9 报告是否完整且事实校验通过", "判断报告是否完整、有依据、结构正确，并通过事实校验。", "citation_exists、date_valid、price_source_valid、financial_metric_match、news_source_valid、citation_match", "进入 UI 输出。", "幻觉、引用缺失、过度投资建议、来源冲突、数据口径冲突。", "删除无证据内容，补检索，重新生成，展示分歧或转人工。"]],
+  c_persist: [["Step10 UI 是否符合权限、格式和风险要求", "判断报告页、表格、卡片、新闻列表、风险提示是否可展示。", "ui_format_valid、permission_passed、sensitive_field_hidden、risk_disclaimer_exists、audit_log_written", "正式展示并记录普通日志。", "权限不明、敏感字段外显、格式错误、用户反馈负面。", "默认脱敏，格式修复，补风险提示，失败样本进入 Bad Case 与回归测试。"]],
+  d_entry: [["D0 复杂意图是否需要自主规划", "判断“贵州茅台 + 国泰君安五步法”这类开放式研究是否需要 Planner 拆任务。", "complexity_level、framework_required、stock_code、analysis_depth、tool_calls_needed、risk_level", "进入 Plan 任务拆解。", "股票或框架不明确、框架未入库、目标过大。", "追问股票或框架，使用通用催化剂分析框架，缩小目标。"]],
+  d_plan: [["T1-T12 TaskChain 是否完整", "判断复杂研究是否拆成可执行任务链。", "stock/framework、report_available、financial_data、news_event、catalyst、transmission_path、case_similarity、market_structure、risk_condition、confidence_basis", "生成 12 步 TaskChain 并进入 Executor。", "研报过旧、观点冲突、财报口径冲突、新闻真假不明、催化剂方向不明、证据冲突。", "展示观点分歧、标注口径、多源验证、降低置信度、分项置信度、删除无证据结论。"]],
+  d_chain: [["TaskChain 旁路是否可追踪", "判断每个子任务是否有输入、依赖、工具、输出、状态和失败策略。", "task_input、dependency、tool_name、output_schema、status、failure_policy", "进入 Executor 循环并可恢复执行。", "依赖缺失、工具不可用、输出缺字段、任务状态不一致。", "暂停任务，补依赖，换工具，记录失败状态，回到 Planner。"]],
+  d_exec: [["Executor 工具执行是否完成", "判断每个子任务槽位是否完整、工具是否可调用、Observation 是否可用。", "slot_completeness、tool_available、json_valid、tool_result、observation_quality、round_limit", "把 Observation 回注给 Planner/Reflect。", "参数错、工具失败、返回空、超轮次、循环调用。", "修参数、重试、换工具、转人工，限制轮次并记录 Bad Case。"]],
+  d_reflect: [["Reflect 后置评判是否通过", "判断工具结果是否足以回答，是否存在高风险建议、过拟合、数据不足、参数不合理。", "evidence_check、risk_check、task_audit、conflict_count、completion_score", "通过则进入完成度验证。", "证据不足、风险过高、结论冲突、完成度不足。", "补检索、重试、追问、降低结论强度或转人工复核。"]],
+  d_done: [["完成度验证是否通过", "判断所有子任务是否有输出、证据、指标和风险说明。", "task_status_all_done、evidence_exists、metrics_exists、risk_statement_exists、acceptance_criteria", "进入统一生成。", "任一子任务未完成、缺证据、缺风险说明、引用缺失。", "返回未完成项，继续 Executor 循环，或输出部分结果并标低置信。"]],
+  fallback: [["F0 缺失追问与兜底选择", "判断失败属于缺槽、工具/API失败、路径不适合、风险违规、系统无法可靠处理还是需回流优化。", "slot_missing、tool_failed、route_wrong、risk_violation、manual_review_required、bad_case_signal", "选择追问补槽、重试、换路径、降级、拒答、转人工或回流优化。", "多模块同时失败、失败原因不明、用户反馈模糊。", "追问用户，人工标注，归因分析，写 Bad Case，更新知识库/工具/Prompt。"]],
+  mcp: [["M0 MCP 工具请求是否合法", "判断工具是否可用、JSON/参数是否合法、权限是否满足、失败是否可重试。", "tool_list、tool_schema、tool_request_json、permission、timeout_policy、tool_result_schema", "发起 Tool Request，接收 Tool Result，并回注给 Agent。", "工具不存在、参数错、权限不足、返回空、超时。", "修参数、重试、换工具、转人工，完善工具注册表和异常码。"]],
+  generate: [["G1 输出是否有事实依据", "判断生成内容是否能追溯到研报、财报、新闻、SQL、工具返回或原始引用。", "citation_exists、source_traceable、sql_result_exists、tool_result_exists、news_source_exists、report_page_exists、hallucination_score", "输出正式结论，展示来源，进入风险校验。", "引用错位、来源冲突、SQL 和 RAG 冲突、工具结果与缓存冲突、编造来源。", "删除无证据内容，改为不确定，补检索，重新生成或请求上传资料。"]],
+  risk: [["G2-G4 风控、事实校验与检查 Agent", "判断输出是否有投资建议风险，事实校验是否通过，是否需要检查 Agent。", "buy_sell_language、profit_promise、position_recommendation、date_valid、stock_code_valid、financial_metric_match、source_conflict_count、risk_level", "通过后进入 UI 输出。", "直接买卖建议、收益承诺、仓位建议、价格过期、来源冲突、生成 Agent 与检查 Agent 冲突。", "转教育性解释，加风险提示，不给买卖指令，重新查询/生成，检查 Agent 或人工复核。"]],
+  ui: [["G5 是否进入 Bad Case 回流", "判断本次问答、RAG、SQL、工具调用、报告生成、事实校验是否出现失败或低置信。", "user_feedback_negative、rag_miss、sql_error、tool_failed、hallucination_detected、citation_error、wrong_route、fact_check_failed、manual_review_required", "正常展示并记录普通日志。", "用户反馈不对、看不懂、多个模块失败、原因不明。", "追问、解释、转人工、收集满意度，记录 Bad Case，补评测集并回归测试。"]]
+};
+
 const fallbackStrategies = [
   ["追问补槽", "用户信息不完整，直接执行会误判", "问预算、时间、对象、权限、输出格式", "回到 Query 理解"],
   ["重试", "工具/API/模型短暂失败", "限次重试、换模型、换接口、指数退避", "回到当前执行节点"],
@@ -1052,6 +1133,39 @@ function renderSubtable(node) {
   `;
 }
 
+function judgmentsForNode(node) {
+  return nodeJudgmentDetails[node.id] || [[
+    "通用节点判断",
+    decisionText(node),
+    `${node.meta}；${node.tech}`,
+    edgeSummary(nodeEdges(node.id).outgoing, "out"),
+    fallbackText(node),
+    "回到 Query 理解、当前执行节点、统一生成/风控或 Bad Case 回流。"
+  ]];
+}
+
+function renderJudgmentDetails(node) {
+  return `
+    <div class="judgment-block" aria-label="${escapeHtml(node.title)} 判断明细">
+      <h4 class="judgment-title">判断明细</h4>
+      ${judgmentsForNode(node).map(row => `
+        <div class="judgment-card">
+          <div class="judgment-name">${escapeHtml(row[0])}</div>
+          <table class="subtable">
+            <tbody>
+              <tr><th>判断内容</th><td>${escapeHtml(row[1])}</td></tr>
+              <tr><th>判断依据</th><td>${escapeHtml(row[2])}</td></tr>
+              <tr><th>YES 分支</th><td>${escapeHtml(row[3])}</td></tr>
+              <tr><th>NO/异常</th><td>${escapeHtml(row[4])}</td></tr>
+              <tr><th>兜底/回流</th><td>${escapeHtml(row[5])}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
 function renderInlineCollapse(node) {
   return `
     <div class="node-collapse" role="region" aria-label="${escapeHtml(node.title)} 节点判断与内容表">
@@ -1064,6 +1178,7 @@ function renderInlineCollapse(node) {
       </div>
       <div class="collapse-body">
         ${renderSubtable(node)}
+        ${renderJudgmentDetails(node)}
       </div>
     </div>
   `;
@@ -1089,6 +1204,7 @@ function closeInlineCollapse(exceptId = "") {
       btn.setAttribute("aria-expanded", "false");
     }
   });
+  if (!exceptId) document.body.classList.remove("inline-open");
 }
 
 function toggleInlineCollapse(id) {
@@ -1100,6 +1216,7 @@ function toggleInlineCollapse(id) {
   panel.style.display = shouldOpen ? "" : "none";
   btn.textContent = shouldOpen ? "−" : "+";
   btn.setAttribute("aria-expanded", String(shouldOpen));
+  document.body.classList.toggle("inline-open", shouldOpen);
 }
 
 function addInlineCollapseControls() {
@@ -1168,6 +1285,10 @@ function openDrawer(id) {
       <div class="drawer-grid">
         ${childRows(node).map(([k, v]) => `<div>${escapeHtml(k)}</div><div>${escapeHtml(v)}</div>`).join("")}
       </div>
+    </section>
+    <section class="drawer-section">
+      <h3>判断明细</h3>
+      ${renderJudgmentDetails(node)}
     </section>
     <section class="drawer-section">
       <h3>节点标签</h3>
